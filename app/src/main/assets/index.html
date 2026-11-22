@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Mock GPS</title>
+<link rel="stylesheet" href="leaflet/leaflet.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="map" aria-label="Map"></div>
+
+<!-- Top: search + setup notice -->
+<header class="top" id="top">
+  <form class="search" id="searchForm" role="search" autocomplete="off">
+    <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+    <input id="q" type="search" placeholder="Search a place or paste lat, lng" enterkeyhint="search" spellcheck="false">
+    <button type="button" id="clearQ" class="icon-btn" aria-label="Clear search" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </form>
+  <ul class="results" id="results" hidden></ul>
+
+  <div class="setup" id="setup" hidden>
+    <div class="setup-text">
+      <strong>One-time setup</strong>
+      <span>In <b>Developer options</b>, set <b>Select mock location app</b> to <b>Mock GPS</b>.</span>
+    </div>
+    <div class="setup-actions">
+      <button type="button" class="link-btn" id="setupHow">How?</button>
+      <button type="button" class="pill-btn" id="openDev">Open settings</button>
+    </div>
+  </div>
+</header>
+
+<!-- Floating buttons -->
+<div class="fabs" id="fabs">
+  <button type="button" class="fab" id="btnFavs" aria-label="Saved places">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+  </button>
+  <button type="button" class="fab" id="btnLocate" aria-label="Go to my location">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
+  </button>
+</div>
+
+<!-- Bottom sheet -->
+<section class="sheet" id="sheet">
+  <div class="status-row">
+    <div class="status" id="status">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="status-text" id="statusText">Not mocking</span>
+    </div>
+    <label class="toggle drift"><input type="checkbox" id="drift"><span class="track"></span>Drift</label>
+  </div>
+
+  <div class="seg" role="tablist" aria-label="Mode">
+    <button type="button" role="tab" data-mode="point" class="on">Point</button>
+    <button type="button" role="tab" data-mode="route">Route</button>
+  </div>
+
+  <div class="pane" id="pointPane">
+    <div class="coords">
+      <div class="coord"><span class="label">Latitude</span><span class="value" id="latV">—</span></div>
+      <div class="coord"><span class="label">Longitude</span><span class="value" id="lngV">—</span></div>
+      <button type="button" class="icon-btn tinted" id="btnCopy" aria-label="Copy coordinates" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+      </button>
+      <button type="button" class="icon-btn tinted" id="btnSave" aria-label="Save place" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+      </button>
+    </div>
+    <p class="hint" id="pointHint">Tap the map to drop a pin, or search above.</p>
+  </div>
+
+  <div class="pane" id="routePane" hidden>
+    <div class="stats">
+      <div><b id="wpCount">0</b><span>points</span></div>
+      <div><b id="routeDist">0 m</b><span>distance</span></div>
+      <div><b id="routeEta">—</b><span>time</span></div>
+    </div>
+    <div class="speeds" id="speeds">
+      <button type="button" data-speed="5">Walk</button>
+      <button type="button" data-speed="10">Run</button>
+      <button type="button" data-speed="18">Bike</button>
+      <button type="button" data-speed="50">Car</button>
+      <label class="speed-input"><input id="speed" type="number" min="1" max="400" step="1" inputmode="decimal" aria-label="Speed in km/h"><span>km/h</span></label>
+    </div>
+    <div class="row">
+      <label class="toggle"><input type="checkbox" id="loop"><span class="track"></span>Loop</label>
+      <div class="row-actions">
+        <button type="button" class="text-btn" id="btnUndo">Undo</button>
+        <button type="button" class="text-btn" id="btnClear">Clear</button>
+      </div>
+    </div>
+    <div class="progress" id="progress" hidden><i></i></div>
+    <p class="hint" id="routeHint">Tap the map to add waypoints. Drag them to adjust.</p>
+  </div>
+
+  <div class="actions" id="actions">
+    <button type="button" class="btn primary" id="btnStart">Start mocking</button>
+    <button type="button" class="btn secondary" id="btnMove" hidden>Move here</button>
+    <button type="button" class="btn secondary" id="btnPause" hidden>Pause</button>
+    <button type="button" class="btn danger" id="btnStop" hidden>Stop</button>
+  </div>
+</section>
+
+<!-- Modal (saved places, naming, help) -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h2 id="modalTitle"></h2>
+      <button type="button" class="icon-btn" id="modalClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="leaflet/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

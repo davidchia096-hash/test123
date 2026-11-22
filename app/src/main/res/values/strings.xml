@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mock GPS</string>
+    <string name="notif_channel">Mock location</string>
+    <string name="notif_starting">Starting…</string>
+    <string name="notif_title_point">Mocking location</string>
+    <string name="notif_title_route">Following route</string>
+    <string name="notif_paused">Paused</string>
+    <string name="notif_arrived">Arrived</string>
+    <string name="action_stop">Stop</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="copied">Copied</string>
+</resources>
