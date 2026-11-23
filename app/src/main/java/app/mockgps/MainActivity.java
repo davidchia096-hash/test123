@@ -2,7 +2,6 @@ package app.mockgps;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.AppOpsManager;
 import android.content.ActivityNotFoundException;
@@ -12,7 +11,6 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.graphics.Insets;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
@@ -22,7 +20,6 @@ import android.os.Process;
 import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -52,16 +49,19 @@ public class MainActivity extends Activity implements MockState.Listener {
     /** Assets are served from a fake https origin so map tiles get a proper Referer. */
     private static final String ASSET_HOST = "appassets.androidplatform.net";
     private static final String START_URL = "https://" + ASSET_HOST + "/assets/index.html";
-    private static final String USER_AGENT_SUFFIX = " MockGPS/1.0 (Android)";
+    private static final String USER_AGENT_SUFFIX = " MockGPS/1.1 (Android)";
 
     private static final int REQ_START = 1;
     private static final int REQ_LOCATE = 2;
+    private static final int REQ_PICK_PLACE = 3;
     private static final String PREFS = "mockgps";
     private static final String PREF_ASKED_NOTIFICATIONS = "askedNotifications";
 
     private WebView webView;
     private Runnable pendingStart;
     private boolean pageReady;
+    /** A place picked/shared before the page finished loading. */
+    private String pendingPlaceJson;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -76,7 +76,7 @@ public class MainActivity extends Activity implements MockState.Listener {
         root.setBackgroundColor(Color.WHITE);
         root.addView(webView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        if (Build.VERSION.SDK_INT >= 35) root.setOnApplyWindowInsetsListener(this::applyInsets);
+        if (Build.VERSION.SDK_INT >= 35) root.setOnApplyWindowInsetsListener(GoogleMapsPickerActivity::fitSystemBars);
         setContentView(root);
 
         WebSettings ws = webView.getSettings();
@@ -94,15 +94,94 @@ public class MainActivity extends Activity implements MockState.Listener {
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
             webView.loadUrl(START_URL);
         }
+        if (savedInstanceState == null) handleIncoming(getIntent());
     }
 
-    /** Only used on Android 15+, where edge-to-edge is enforced; older versions lay out normally. */
-    @TargetApi(30)
-    private WindowInsets applyInsets(View v, WindowInsets insets) {
-        Insets i = insets.getInsets(WindowInsets.Type.systemBars()
-                | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
-        v.setPadding(i.left, i.top, i.right, i.bottom);
-        return WindowInsets.CONSUMED;
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleIncoming(intent);
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Places from Google Maps (in-app picker, or shared from the Google Maps app)
+
+    /** Text shared to Mock GPS, e.g. "Marina Bay Sands\n…\nhttps://maps.app.goo.gl/…". */
+    private void handleIncoming(Intent intent) {
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+        String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+        if (text == null || text.trim().isEmpty()) return;
+        String nameHint = MapsLinkParser.firstTextLine(text);
+        String url = MapsLinkParser.extractUrl(text);
+
+        if (url != null) {
+            MapsLinkParser.Place p = MapsLinkParser.parseUrl(url);
+            if (p != null && p.precise) {
+                deliverPlace(p.name != null ? p : p.withName(nameHint));
+            } else if (MapsLinkParser.isGoogleMapsUrl(url)) {
+                // Short links (maps.app.goo.gl) need Google's page to resolve the place.
+                openPicker(url, true, nameHint);
+            } else if (p != null) {
+                deliverPlace(p);
+            } else {
+                Toast.makeText(this, R.string.share_no_location, Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+        MapsLinkParser.Place p = MapsLinkParser.parseCoordinates(text);
+        if (p != null) {
+            deliverPlace(p);
+        } else {
+            openPicker(MapsLinkParser.googleMapsUrl(nameHint != null ? nameHint : text, 20, 0, 3), false, null);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void openPicker(String url, boolean autoPick, String nameHint) {
+        Intent i = new Intent(this, GoogleMapsPickerActivity.class)
+                .putExtra(GoogleMapsPickerActivity.EXTRA_URL, url)
+                .putExtra(GoogleMapsPickerActivity.EXTRA_AUTO_PICK, autoPick)
+                .putExtra(GoogleMapsPickerActivity.EXTRA_NAME_HINT, nameHint);
+        startActivityForResult(i, REQ_PICK_PLACE);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_PICK_PLACE || resultCode != RESULT_OK || data == null) return;
+        JSONObject o = new JSONObject();
+        try {
+            o.put("lat", data.getDoubleExtra(GoogleMapsPickerActivity.RESULT_LAT, 0));
+            o.put("lng", data.getDoubleExtra(GoogleMapsPickerActivity.RESULT_LNG, 0));
+            String name = data.getStringExtra(GoogleMapsPickerActivity.RESULT_NAME);
+            o.put("name", name == null ? JSONObject.NULL : name);
+            o.put("precise", data.getBooleanExtra(GoogleMapsPickerActivity.RESULT_PRECISE, false));
+        } catch (JSONException e) {
+            return;
+        }
+        deliverPlaceJson(o.toString());
+    }
+
+    private void deliverPlace(MapsLinkParser.Place p) {
+        JSONObject o = new JSONObject();
+        try {
+            o.put("lat", p.lat);
+            o.put("lng", p.lng);
+            o.put("name", p.name == null ? JSONObject.NULL : p.name);
+            o.put("precise", p.precise);
+        } catch (JSONException e) {
+            return;
+        }
+        deliverPlaceJson(o.toString());
+    }
+
+    private void deliverPlaceJson(String json) {
+        if (pageReady) {
+            callJs("onPlacePicked", json);
+        } else {
+            pendingPlaceJson = json;
+        }
     }
 
     @Override
@@ -308,6 +387,10 @@ public class MainActivity extends Activity implements MockState.Listener {
             runOnUiThread(() -> {
                 pageReady = true;
                 sendResumeInfo();
+                if (pendingPlaceJson != null) {
+                    callJs("onPlacePicked", pendingPlaceJson);
+                    pendingPlaceJson = null;
+                }
             });
         }
 
@@ -395,6 +478,13 @@ public class MainActivity extends Activity implements MockState.Listener {
                     Toast.makeText(MainActivity.this, R.string.copied, Toast.LENGTH_SHORT).show();
                 }
             });
+        }
+
+        /** Opens Google Maps (searching {@code query} near the given view) to pick a place. */
+        @JavascriptInterface
+        public void openGoogleMaps(String query, double lat, double lng, double zoom) {
+            String url = MapsLinkParser.googleMapsUrl(query, lat, lng, zoom);
+            runOnUiThread(() -> openPicker(url, false, null));
         }
 
         @JavascriptInterface

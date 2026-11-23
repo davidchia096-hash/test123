@@ -48,6 +48,13 @@ button svg, .search-icon { width: 22px; height: 22px; fill: none; stroke: curren
 }
 .search input::placeholder { color: #8a9590; }
 .search input::-webkit-search-cancel-button { display: none; }
+.gmaps-btn {
+  display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px 0 10px; flex: none;
+  border: 0; border-radius: 19px; background: var(--accent-soft); color: var(--accent-strong);
+  font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.gmaps-btn:active { background: #cde8e0; }
+.gmaps-btn svg { width: 18px; height: 18px; }
 
 .results {
   list-style: none; margin: 8px 0 0; padding: 6px 0; max-height: 46vh; overflow-y: auto;
@@ -59,6 +66,13 @@ button svg, .search-icon { width: 22px; height: 22px; fill: none; stroke: curren
 .results .r-name { display: block; font-weight: 600; font-size: 15px; }
 .results .r-sub { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .results .r-empty { color: var(--muted); cursor: default; }
+.results .r-google { display: flex; align-items: center; gap: 12px; background: var(--accent-soft); border-bottom: 0; margin: 0 6px 4px; border-radius: 12px; }
+.results .r-google:active { background: #cde8e0; }
+.results .r-google svg { width: 22px; height: 22px; flex: none; color: var(--accent-strong); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.results .r-google div { min-width: 0; }
+.results .r-google .r-name { color: var(--accent-strong); }
+.results .r-head { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); cursor: default; padding: 10px 16px 4px; border-bottom: 0; }
+.results .r-head:active { background: none; }
 
 .setup {
   margin-top: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: center;

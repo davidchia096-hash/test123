@@ -11,4 +11,14 @@
     <string name="action_pause">Pause</string>
     <string name="action_resume">Resume</string>
     <string name="copied">Copied</string>
+    <string name="share_label">Drop pin in Mock GPS</string>
+    <string name="share_no_location">No location found in what was shared.</string>
+    <string name="picker_title">Google Maps</string>
+    <string name="picker_close">Close</string>
+    <string name="picker_hint">Search Google Maps, then tap a place to select it.</string>
+    <string name="picker_use_place">Use this place</string>
+    <string name="picker_use_centre">Use map centre</string>
+    <string name="picker_map_centre">Map centre</string>
+    <string name="picker_selected_place">Selected place</string>
+    <string name="picker_tap_for_exact">Tap a place for its exact location.</string>
 </resources>

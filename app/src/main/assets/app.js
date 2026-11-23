@@ -17,7 +17,7 @@
   function $(id) { return document.getElementById(id); }
 
   var ui = {
-    top: $('top'), sheet: $('sheet'), q: $('q'), clearQ: $('clearQ'), searchForm: $('searchForm'), results: $('results'),
+    top: $('top'), sheet: $('sheet'), q: $('q'), clearQ: $('clearQ'), btnGoogle: $('btnGoogle'), searchForm: $('searchForm'), results: $('results'),
     setup: $('setup'), setupHow: $('setupHow'), openDev: $('openDev'),
     btnFavs: $('btnFavs'), btnLocate: $('btnLocate'),
     status: $('status'), statusText: $('statusText'),
@@ -440,8 +440,10 @@
     search(ui.q.value.trim());
   });
 
+  var MAP_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5z"/><path d="M9 4v13M15 6.5v13"/></svg>';
+
   function search(q) {
-    if (!q) return;
+    if (!q) { openGoogle(''); return; }
     var c = parseCoords(q);
     if (c) {
       ui.q.blur();
@@ -451,47 +453,70 @@
     }
     if (searchController) searchController.abort();
     searchController = window.AbortController ? new AbortController() : null;
-    showResultMessage('Searching…');
-    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&q=' + encodeURIComponent(q);
+    renderResults(q, [], 'Searching…');
+    var url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=' + encodeURIComponent(q);
     fetch(url, searchController ? { signal: searchController.signal } : {})
       .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
       .then(function (items) {
         ui.q.blur();
-        if (!items.length) { showResultMessage('No places found.'); return; }
-        ui.results.innerHTML = '';
-        items.forEach(function (it) {
-          var li = document.createElement('li');
-          var name = it.name || String(it.display_name).split(',')[0];
-          var nameEl = document.createElement('span');
-          nameEl.className = 'r-name';
-          nameEl.textContent = name;
-          var sub = document.createElement('span');
-          sub.className = 'r-sub';
-          sub.textContent = it.display_name;
-          li.appendChild(nameEl);
-          li.appendChild(sub);
-          li.addEventListener('click', function () {
-            closeResults();
-            choosePlace(Number(it.lat), Number(it.lon), name);
-          });
-          ui.results.appendChild(li);
-        });
-        ui.results.hidden = false;
+        renderResults(q, items, items.length ? null : 'No matches here — try Google Maps above.');
       })
       .catch(function (err) {
         if (err && err.name === 'AbortError') return;
-        showResultMessage('Search failed. Check your connection.');
+        renderResults(q, [], 'Couldn’t search OpenStreetMap. Google Maps above still works.');
       });
   }
 
-  function showResultMessage(msg) {
+  /** Google Maps first (best for shops, restaurants, landmarks), then OpenStreetMap matches. */
+  function renderResults(q, items, msg) {
     ui.results.innerHTML = '';
-    var li = document.createElement('li');
-    li.className = 'r-empty';
-    li.textContent = msg;
-    ui.results.appendChild(li);
+    var g = document.createElement('li');
+    g.className = 'r-google';
+    g.innerHTML = MAP_ICON + '<div><span class="r-name"></span><span class="r-sub">Shops, restaurants, landmarks and more</span></div>';
+    g.querySelector('.r-name').textContent = 'Search Google Maps for “' + q + '”';
+    g.addEventListener('click', function () { openGoogle(q); });
+    ui.results.appendChild(g);
+
+    var head = document.createElement('li');
+    head.className = 'r-head';
+    head.textContent = 'OpenStreetMap';
+    ui.results.appendChild(head);
+
+    if (msg) {
+      var m = document.createElement('li');
+      m.className = 'r-empty';
+      m.textContent = msg;
+      ui.results.appendChild(m);
+    }
+    items.forEach(function (it) {
+      var li = document.createElement('li');
+      var name = it.name || String(it.display_name).split(',')[0];
+      var nameEl = document.createElement('span');
+      nameEl.className = 'r-name';
+      nameEl.textContent = name;
+      var sub = document.createElement('span');
+      sub.className = 'r-sub';
+      sub.textContent = it.display_name;
+      li.appendChild(nameEl);
+      li.appendChild(sub);
+      li.addEventListener('click', function () {
+        closeResults();
+        choosePlace(Number(it.lat), Number(it.lon), name);
+      });
+      ui.results.appendChild(li);
+    });
     ui.results.hidden = false;
   }
+
+  /** Opens the Google Maps picker screen, searching near the current map view. */
+  function openGoogle(q) {
+    closeResults();
+    ui.q.blur();
+    var c = map.getCenter().wrap();
+    native.openGoogleMaps(q || '', c.lat, c.lng, map.getZoom());
+  }
+
+  ui.btnGoogle.addEventListener('click', function () { openGoogle(ui.q.value.trim()); });
 
   function closeResults() {
     ui.results.hidden = true;
@@ -679,6 +704,13 @@
     window.onNativeState(info.state);
   };
 
+  window.onPlacePicked = function (p) {
+    if (!p || !isFinite(p.lat) || !isFinite(p.lng)) return;
+    choosePlace(p.lat, p.lng, p.name || null);
+    if (!p.precise) toast('Used the map centre — drag the pin to fine-tune.');
+    else if (state.mode === 'point') toast('Pin dropped' + (p.name ? ' at ' + p.name : ''));
+  };
+
   window.onPermissionResult = function (r) {
     if (!r.granted) {
       toast(r.forStart
@@ -762,7 +794,10 @@
       getLastKnownLocation: function () { return JSON.stringify({ lat: 1.2834, lng: 103.8607, accuracy: 8 }); },
       requestLocationPermission: function () {},
       copyText: function () { toast('Copied'); },
-      openUrl: function (u) { window.open(u, '_blank'); }
+      openUrl: function (u) { window.open(u, '_blank'); },
+      openGoogleMaps: function () {
+        setTimeout(function () { window.onPlacePicked({ lat: 1.304052, lng: 103.831767, name: 'ION Orchard', precise: true }); }, 300);
+      }
     };
   }
 

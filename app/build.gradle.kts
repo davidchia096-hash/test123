@@ -10,8 +10,8 @@ android {
         applicationId = "app.mockgps"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     buildTypes {
@@ -39,4 +39,6 @@ dependencies {
     // Lets the service also feed Google Play Services' fused location provider,
     // which most apps (maps, ride-hailing, games) read from.
     implementation("com.google.android.gms:play-services-location:21.3.0")
+
+    testImplementation("junit:junit:4.13.2")
 }

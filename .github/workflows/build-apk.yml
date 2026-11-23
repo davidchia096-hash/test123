@@ -20,10 +20,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
+      - name: Run unit tests and build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace assembleDebug
+          ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
